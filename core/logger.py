@@ -40,7 +40,8 @@ class BoxDrawer:
     
     def empty(self) -> str:
         # Exatamente 103 caracteres (1 + 101 espaços + 1)
-        return f"│{' ' * self.inner_width}│"
+        colors = Colors()
+        return f"{colors.CINZA}│{colors.RESET}{' ' * self.inner_width}{colors.CINZA}│{colors.RESET}"
     
     def line_centered(self, content: str) -> str:
         """
@@ -58,8 +59,9 @@ class BoxDrawer:
         left_padding = total_padding // 2
         right_padding = total_padding - left_padding
         
-        # Monta a linha com espaçamento calculado
-        return f"│{' ' * left_padding}{content}{' ' * right_padding}│"
+        # Monta a linha com espaçamento calculado e bordas cinza
+        colors = Colors()
+        return f"{colors.CINZA}│{colors.RESET}{' ' * left_padding}{content}{' ' * right_padding}{colors.CINZA}│{colors.RESET}"
     
     def line_left(self, content: str, indent: int = 2) -> str:
         """Alinha texto à esquerda com indentação"""
@@ -71,7 +73,8 @@ class BoxDrawer:
         # Calcula padding à direita
         right_padding = self.inner_width - indent - content_length
         
-        return f"│{' ' * indent}{content}{' ' * right_padding}│"
+        colors = Colors()
+        return f"{colors.CINZA}│{colors.RESET}{' ' * indent}{content}{' ' * right_padding}{colors.CINZA}│{colors.RESET}"
     
     def separator(self) -> str:
         return f"├{'─' * self.inner_width}┤"
@@ -126,8 +129,8 @@ class Logger:
             self.clear()
             
             print(f"{self.colors.CINZA}{self.box.top()}{self.colors.RESET}")
-            print(f"{self.colors.CINZA}{self.box.empty()}{self.colors.RESET}")
-            print(f"{self.colors.CINZA}{self.box.empty()}{self.colors.RESET}")
+            print(self.box.empty())
+            print(self.box.empty())
             
             # IMPORTANTE: Logo com espaços extras para alinhamento (como no original)
             logo_lines = [
@@ -140,11 +143,11 @@ class Logger:
             ]
             
             for line in logo_lines:
-                print(f"{self.colors.CINZA}{self.box.line_centered(line)}{self.colors.RESET}")
+                print(self.box.line_centered(line))
             
-            print(f"{self.colors.CINZA}{self.box.empty()}{self.colors.RESET}")
-            print(f"{self.colors.CINZA}{self.box.line_centered(f'{self.colors.BRANCO}Setup Modular v0.1{self.colors.RESET}')}{self.colors.RESET}")
-            print(f"{self.colors.CINZA}{self.box.empty()}{self.colors.RESET}")
+            print(self.box.empty())
+            print(self.box.line_centered(f'{self.colors.BRANCO}Setup Modular v0.1{self.colors.RESET}'))
+            print(self.box.empty())
             print(f"{self.colors.CINZA}{self.box.bottom()}{self.colors.RESET}")
             print()
     
@@ -154,7 +157,7 @@ class Logger:
             print(f"\n[{self._timestamp()}] === {title.upper()} ===")
         else:
             print(f"\n{self.colors.CINZA}{self.box.top()}{self.colors.RESET}")
-            print(f"{self.colors.CINZA}{self.box.line_centered(f'{self.colors.BRANCO}{title}{self.colors.RESET}')}{self.colors.RESET}")
+            print(self.box.line_centered(f'{self.colors.BRANCO}{title}{self.colors.RESET}'))
             print(f"{self.colors.CINZA}{self.box.bottom()}{self.colors.RESET}\n")
     
     def start_progress(self, total: int):
@@ -249,20 +252,21 @@ class Logger:
             color = self.colors.CINZA
         
         print(f"\n{color}{self.box.top()}{self.colors.RESET}")
-        print(f"{color}{self.box.line_centered(message)}{self.colors.RESET}")
+        print(self.box.line_centered(message))
         print(f"{color}{self.box.bottom()}{self.colors.RESET}\n")
     
     def _draw_error_box(self, message: str, hint: str = None):
         """Desenha box de erro elegante"""
+        # Usa vermelho para top/bottom, mas as bordas verticais são controladas pelos métodos
         print(f"\n{self.colors.VERMELHO}{self.box.top()}{self.colors.RESET}")
         
         error_msg = f"{self.colors.VERMELHO}✗ {message}{self.colors.RESET}"
-        print(f"{self.colors.VERMELHO}{self.box.line_centered(error_msg)}{self.colors.RESET}")
+        print(self.box.line_centered(error_msg))
         
         if hint:
-            print(f"{self.colors.VERMELHO}{self.box.empty()}{self.colors.RESET}")
+            print(self.box.empty())
             hint_msg = f"{self.colors.BEGE}{hint}{self.colors.RESET}"
-            print(f"{self.colors.VERMELHO}{self.box.line_centered(hint_msg)}{self.colors.RESET}")
+            print(self.box.line_centered(hint_msg))
         
         print(f"{self.colors.VERMELHO}{self.box.bottom()}{self.colors.RESET}\n")
     
