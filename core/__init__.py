@@ -1,0 +1,1 @@
+# Core module for LivChat Setup v0.1
