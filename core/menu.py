@@ -10,7 +10,7 @@ import os
 import subprocess
 import re
 from typing import List, Dict, Optional
-from .logger import Colors, BoxDrawer
+from .logger import Colors
 
 class InteractiveMenu:
     """Menu TUI profissional com navegação por teclado e visual elegante"""
@@ -28,58 +28,34 @@ class InteractiveMenu:
         
         # Visual components
         self.colors = Colors()
-        self.box = BoxDrawer(103)
+        
+        # Largura do menu (baseado no original)
+        self.menu_width = 92
         
         # Lista de aplicações disponíveis
         self.apps = [
-            {"id": "docker", "name": "Docker + Swarm", "category": "infra", "status": "running", "cpu": "0.5%", "mem": "45MB"},
-            {"id": "traefik", "name": "Traefik (SSL)", "category": "infra", "status": "running", "cpu": "0.3%", "mem": "32MB"},
-            {"id": "portainer", "name": "Portainer", "category": "infra", "status": "stopped", "cpu": "-", "mem": "-"},
-            {"id": "postgres", "name": "PostgreSQL", "category": "database", "status": "running", "cpu": "1.2%", "mem": "256MB"},
-            {"id": "redis", "name": "Redis", "category": "database", "status": "stopped", "cpu": "-", "mem": "-"},
-            {"id": "n8n", "name": "N8N", "category": "app", "status": "running", "cpu": "0.8%", "mem": "120MB"},
-            {"id": "chatwoot", "name": "Chatwoot", "category": "app", "status": "stopped", "cpu": "-", "mem": "-"},
-            {"id": "directus", "name": "Directus", "category": "app", "status": "stopped", "cpu": "-", "mem": "-"},
+            {"id": "docker", "name": "Docker + Swarm", "status": "2/2", "cpu": "0.5%", "mem": "45MB"},
+            {"id": "traefik", "name": "Traefik (SSL)", "status": "2/2", "cpu": "0.3%", "mem": "32MB"},
+            {"id": "portainer", "name": "Portainer", "status": "-", "cpu": "-", "mem": "-"},
+            {"id": "postgres", "name": "PostgreSQL", "status": "2/2", "cpu": "1.2%", "mem": "256MB"},
+            {"id": "redis", "name": "Redis", "status": "-", "cpu": "-", "mem": "-"},
+            {"id": "n8n", "name": "N8N", "status": "2/2", "cpu": "0.8%", "mem": "120MB"},
+            {"id": "chatwoot", "name": "Chatwoot", "status": "-", "cpu": "-", "mem": "-"},
+            {"id": "directus", "name": "Directus", "status": "-", "cpu": "-", "mem": "-"},
         ]
-        
-        # Atualiza status real do Docker
-        self._update_docker_status()
         
         # Configurações do terminal
         self.old_settings = None
-    
-    def _update_docker_status(self):
-        """Atualiza status real dos containers Docker"""
-        try:
-            # Tenta obter status do Docker
-            result = subprocess.run(
-                ['docker', 'ps', '--format', '{{.Names}}\t{{.Status}}'],
-                capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                running_containers = {}
-                for line in result.stdout.strip().split('\n'):
-                    if line:
-                        parts = line.split('\t')
-                        if len(parts) >= 2:
-                            name = parts[0].lower()
-                            running_containers[name] = 'running' if 'Up' in parts[1] else 'stopped'
-                
-                # Atualiza status das apps
-                for app in self.apps:
-                    for container_name in running_containers:
-                        if app['id'] in container_name:
-                            app['status'] = running_containers[container_name]
-                            break
-        except:
-            # Se falhar, mantém status mockado
-            pass
+        
+        # Contador de linhas para redesenho
+        self.last_drawn_lines = 0
     
     def run(self):
         """Executa o menu interativo principal"""
         try:
             # Mostra logo profissional
             self.logger.show_logo()
+            print()  # Linha extra após logo
             
             # Menu de seleção
             selected = self._run_selection_menu()
@@ -87,7 +63,7 @@ class InteractiveMenu:
             if selected:
                 self._confirm_and_install(selected)
             else:
-                self.logger.info("Nenhuma aplicação selecionada")
+                print(f"\n{self.colors.CINZA}Nenhuma aplicação selecionada{self.colors.RESET}")
                 
         except KeyboardInterrupt:
             print(f"\n\n{self.colors.CINZA}Cancelado pelo usuário{self.colors.RESET}")
@@ -97,17 +73,21 @@ class InteractiveMenu:
         """Menu de seleção com navegação por teclado"""
         self._setup_terminal()
         
+        # Primeira renderização
+        self._draw_menu(first_draw=True)
+        
         try:
             while True:
-                self._draw_menu()
                 key = self._get_key()
                 
                 if key == 'UP':
                     if self.selected_index > 0:
                         self.selected_index -= 1
+                        self._redraw_menu()
                 elif key == 'DOWN':
                     if self.selected_index < len(self.apps) - 1:
                         self.selected_index += 1
+                        self._redraw_menu()
                 elif key == 'SPACE' or key == 'RIGHT':
                     # Toggle seleção
                     current_app = self.apps[self.selected_index]
@@ -115,23 +95,13 @@ class InteractiveMenu:
                         self.selected_items.remove(current_app['id'])
                     else:
                         self.selected_items.add(current_app['id'])
+                    self._redraw_menu()
                 elif key.isdigit():
                     # Seleciona por número
                     num = int(key) - 1
                     if 0 <= num < len(self.apps):
                         self.selected_index = num
-                elif key.isalpha() and not (key == 'q' or key == 'Q'):
-                    # Inicia modo de pesquisa
-                    self.search_mode = True
-                    self.search_term = key
-                elif key == '\x7f':  # Backspace
-                    if self.search_mode and self.search_term:
-                        self.search_term = self.search_term[:-1]
-                    if not self.search_term:
-                        self.search_mode = False
-                elif key == '\x1b' and self.search_mode:  # ESC
-                    self.search_mode = False
-                    self.search_term = ""
+                        self._redraw_menu()
                 elif key == 'ENTER':
                     # Confirma seleção
                     if self.selected_items:
@@ -147,91 +117,129 @@ class InteractiveMenu:
         finally:
             self._restore_terminal()
     
-    def _draw_menu(self):
-        """Desenha o menu profissional com largura 103"""
-        # Move cursor para o topo
-        print("\033[H\033[2J", end="")
+    def _redraw_menu(self):
+        """Redesenha o menu sem limpar input"""
+        # Limpar linhas anteriores
+        for _ in range(self.last_drawn_lines):
+            print(f"\033[1A\033[2K", end="")
+        # Desenhar novo menu
+        self._draw_menu()
+    
+    def _draw_menu(self, first_draw=False):
+        """Desenha o menu profissional com largura correta"""
+        lines = []
         
-        # Header do menu
+        if first_draw:
+            lines.append("")  # linha vazia inicial
+        
+        # Header com contador
         selected_count = len(self.selected_items)
         total_count = len(self.apps)
+        counter_text = f"Selecionados: {selected_count}/{total_count}"
         
-        # Cria o header com espaçamento correto
-        header_left = "─ SETUP LIVCHAT "
-        header_right = f" Selecionados: {selected_count}/{total_count} ─"
-        header_middle_size = 101 - len(header_left) - len(header_right)
-        header_middle = "─" * header_middle_size
+        # Calcular padding para o título
+        title_padding = self.menu_width - len("─ SETUP LIVCHAT ") - len(counter_text) - 5
+        header_line = f"╭─ SETUP LIVCHAT {'─' * title_padding} {counter_text} ─╮"
         
-        print(f"{self.colors.CINZA}╭{header_left}{header_middle}{header_right}╮{self.colors.RESET}")
+        lines.append(f"{self.colors.CINZA}{header_line}{self.colors.RESET}")
         
         # Linha de instruções
-        instructions = "↑/↓ navegar · → marcar (●/○) · Enter executar · Digite para pesquisar"
-        print(f"{self.colors.CINZA}│ {self.colors.BEGE}{instructions.center(99)}{self.colors.CINZA} │{self.colors.RESET}")
-        
-        # Linha vazia
-        print(f"{self.colors.CINZA}│{' ' * 101}│{self.colors.RESET}")
+        instrucoes = " ↑/↓ navegar · → marcar (●/○) · Enter executar · Digite para pesquisar"
+        instrucoes_padding = self.menu_width - len(instrucoes) - 2
+        lines.append(f"{self.colors.CINZA}│{self.colors.BEGE}{instrucoes}{' ' * instrucoes_padding}{self.colors.CINZA}│{self.colors.RESET}")
+        lines.append(f"{self.colors.CINZA}│{' ' * (self.menu_width - 2)}│{self.colors.RESET}")
         
         # Cabeçalho da tabela
-        print(f"{self.colors.CINZA}│ {self.colors.BRANCO}{'APLICAÇÃO':<40} {'STATUS':<15} {'CPU':<10} {'MEM':<10}{' ' * 24}{self.colors.CINZA} │{self.colors.RESET}")
-        
-        # Linha separadora
-        print(f"{self.colors.CINZA}│ {'─' * 99} │{self.colors.RESET}")
+        header_text = " APLICAÇÃO" + " " * 50 + "STATUS    CPU     MEM"
+        header_padding = self.menu_width - len(header_text) - 2
+        lines.append(f"{self.colors.CINZA}│{self.colors.BRANCO}{header_text}{' ' * header_padding}{self.colors.CINZA}│{self.colors.RESET}")
+        lines.append(f"{self.colors.CINZA}│{' ' * (self.menu_width - 2)}│{self.colors.RESET}")
         
         # Lista de aplicações
         for i, app in enumerate(self.apps):
-            # Numeração
-            num = f"[{i + 1}]"
+            # É o item com cursor?
+            is_current = i == self.selected_index
             
-            # Indicador de seleção e cor
-            if i == self.selected_index:
-                cursor = ">"
-                color = self.colors.BRANCO
+            # Símbolo de seleção
+            is_selected = app['id'] in self.selected_items
+            
+            # Formatação do item
+            cursor = "> " if is_current else "  "
+            symbol = "●" if is_selected else "○"
+            
+            # Cor do símbolo e texto
+            if is_selected:
+                symbol_color = self.colors.VERDE
+                text_color = self.colors.VERDE
+            elif is_current:
+                symbol_color = self.colors.BRANCO
+                text_color = self.colors.BRANCO
             else:
-                cursor = " "
-                color = self.colors.CINZA
+                symbol_color = self.colors.CINZA
+                text_color = self.colors.CINZA
             
-            # Checkbox
-            if app['id'] in self.selected_items:
-                checkbox = f"{self.colors.VERDE}●{self.colors.RESET}"
+            # Número do item
+            item_number = f"[{i + 1:1d}]"
+            
+            # Nome da aplicação (limitado a 40 chars)
+            name = app['name']
+            if len(name) > 40:
+                name = name[:37] + "..."
+            
+            # Calcular padding para alinhar com as colunas
+            # Total de espaço para aplicação: 60 chars
+            app_section = f"{cursor}{symbol} {item_number} {name}"
+            padding_to_status = 60 - len(app_section)
+            
+            # Status com cor apropriada
+            if app['status'] != '-':
+                status_str = f"{text_color}{app['status']:>5}{self.colors.RESET}   "
             else:
-                checkbox = "○"
+                status_str = f"{text_color}     {self.colors.RESET}   "
             
-            # Status
-            if app['status'] == 'running':
-                status_display = f"{self.colors.VERDE}2/2{self.colors.RESET}"
-                status_raw = "2/2"
+            # CPU
+            if app['cpu'] != '-':
+                cpu_str = f"{text_color}{app['cpu']:>7}{self.colors.RESET} "
             else:
-                status_display = f"{self.colors.CINZA}-{self.colors.RESET}"
-                status_raw = "-"
+                cpu_str = f"{text_color}       {self.colors.RESET} "
             
-            # Constrói a linha
-            line_parts = [
-                f" {cursor} {checkbox} {num:5}",
-                f"{color}{app['name']:<35}{self.colors.RESET}",
-                f"{status_display}",
-                f"{color}{app['cpu']:>7}{self.colors.RESET}",
-                f"{color}{app['mem']:>10}{self.colors.RESET}"
-            ]
+            # MEM
+            if app['mem'] != '-':
+                mem_str = f"{text_color}{app['mem']:>7}{self.colors.RESET}"
+            else:
+                mem_str = f"{text_color}       {self.colors.RESET}"
             
-            # Calcula tamanho real sem ANSI codes
-            clean_parts = [
-                f" {cursor} {checkbox} {num:5}",
-                f"{app['name']:<35}",
-                f"{status_raw:<10}",
-                f"{app['cpu']:>7}",
-                f"{app['mem']:>10}"
-            ]
-            clean_line = "".join(clean_parts)
-            padding_needed = 99 - len(clean_line)
+            # Montar linha completa
+            if is_current and is_selected:
+                # Cursor E selecionado - TUDO VERDE
+                line_content = f"{self.colors.VERDE}{cursor}{symbol} {item_number} {name}{' ' * padding_to_status}{self.colors.RESET}{status_str}{cpu_str}{mem_str}"
+            elif is_current:
+                # Cursor mas não selecionado - branco
+                line_content = f"{self.colors.BRANCO}{cursor}{symbol_color}{symbol}{self.colors.BRANCO} {item_number} {name}{' ' * padding_to_status}{self.colors.RESET}{status_str}{cpu_str}{mem_str}"
+            elif is_selected:
+                # Selecionado - verde
+                line_content = f"{self.colors.VERDE}{cursor}{symbol} {item_number} {name}{' ' * padding_to_status}{self.colors.RESET}{status_str}{cpu_str}{mem_str}"
+            else:
+                # Normal - cinza
+                line_content = f"{self.colors.CINZA}{cursor}{symbol} {item_number} {name}{' ' * padding_to_status}{self.colors.RESET}{status_str}{cpu_str}{mem_str}"
             
-            # Imprime a linha
-            print(f"{self.colors.CINZA}│{self.colors.RESET}", end="")
-            for part in line_parts:
-                print(part, end="")
-            print(f"{' ' * padding_needed}{self.colors.CINZA} │{self.colors.RESET}")
+            # Calcular padding final
+            clean_line = re.sub(r'\033\[[0-9;]*m', '', line_content)
+            final_padding = self.menu_width - len(clean_line) - 2
+            
+            lines.append(f"{self.colors.CINZA}│{self.colors.RESET}{line_content}{' ' * final_padding}{self.colors.CINZA}│{self.colors.RESET}")
         
         # Footer
-        print(f"{self.colors.CINZA}╰{'─' * 101}╯{self.colors.RESET}")
+        lines.append(f"{self.colors.CINZA}│{' ' * (self.menu_width - 2)}│{self.colors.RESET}")
+        footer_line = "─" * (self.menu_width - 2)
+        lines.append(f"{self.colors.CINZA}╰{footer_line}╯{self.colors.RESET}")
+        
+        # Imprimir tudo de uma vez
+        for line in lines:
+            print(line)
+        
+        # Atualiza contador de linhas desenhadas
+        self.last_drawn_lines = len(lines)
     
     def _setup_terminal(self):
         """Configura terminal para captura de teclas"""
@@ -272,22 +280,29 @@ class InteractiveMenu:
     def _confirm_and_install(self, selected: List[str]):
         """Confirma e instala aplicações selecionadas com visual profissional"""
         self._restore_terminal()
-        self.logger.clear()
+        
+        # Limpar menu anterior
+        for _ in range(self.last_drawn_lines):
+            print(f"\033[1A\033[2K", end="")
+        
+        # Importar BoxDrawer para boxes profissionais
+        from .logger import BoxDrawer
+        box = BoxDrawer(103)
         
         # Mostra resumo profissional
-        print(f"\n{self.colors.CINZA}{self.box.top()}{self.colors.RESET}")
+        print(f"\n{self.colors.CINZA}{box.top()}{self.colors.RESET}")
         title = f"{self.colors.BRANCO}APLICAÇÕES SELECIONADAS{self.colors.RESET}"
-        print(f"{self.colors.CINZA}{self.box.line_centered(title)}{self.colors.RESET}")
-        print(f"{self.colors.CINZA}{self.box.separator()}{self.colors.RESET}")
+        print(f"{self.colors.CINZA}{box.line_centered(title)}{self.colors.RESET}")
+        print(f"{self.colors.CINZA}{box.separator()}{self.colors.RESET}")
         
         # Lista apps selecionadas
         for app_id in selected:
             app = next((a for a in self.apps if a['id'] == app_id), None)
             if app:
                 line = f"  {self.colors.VERDE}●{self.colors.RESET} {app['name']}"
-                print(f"{self.colors.CINZA}{self.box.line_left(line, 4)}{self.colors.RESET}")
+                print(f"{self.colors.CINZA}{box.line_left(line, 4)}{self.colors.RESET}")
         
-        print(f"{self.colors.CINZA}{self.box.bottom()}{self.colors.RESET}")
+        print(f"{self.colors.CINZA}{box.bottom()}{self.colors.RESET}")
         print(f"\n{self.colors.BEGE}Pressione Enter para instalar ou Ctrl+C para cancelar{self.colors.RESET}")
         
         try:
@@ -318,12 +333,12 @@ class InteractiveMenu:
         self.logger.success("Finalizando instalação")
         
         # Box de conclusão
-        print(f"\n{self.colors.CINZA}{self.box.top()}{self.colors.RESET}")
-        print(f"{self.colors.CINZA}{self.box.empty()}{self.colors.RESET}")
+        print(f"\n{self.colors.CINZA}{box.top()}{self.colors.RESET}")
+        print(f"{self.colors.CINZA}{box.empty()}{self.colors.RESET}")
         success_msg = f"{self.colors.VERDE}{self.colors.BOLD}✓ INSTALAÇÃO CONCLUÍDA!{self.colors.RESET}"
-        print(f"{self.colors.CINZA}{self.box.line_centered(success_msg)}{self.colors.RESET}")
-        print(f"{self.colors.CINZA}{self.box.empty()}{self.colors.RESET}")
-        print(f"{self.colors.CINZA}{self.box.bottom()}{self.colors.RESET}")
+        print(f"{self.colors.CINZA}{box.line_centered(success_msg)}{self.colors.RESET}")
+        print(f"{self.colors.CINZA}{box.empty()}{self.colors.RESET}")
+        print(f"{self.colors.CINZA}{box.bottom()}{self.colors.RESET}")
         
         print(f"\n{self.colors.CINZA}Pressione Enter para continuar...{self.colors.RESET}")
         input()

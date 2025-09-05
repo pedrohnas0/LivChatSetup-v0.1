@@ -114,7 +114,7 @@ run_command() {
     PROGRESS_CURRENT=$((PROGRESS_CURRENT + 1))
     
     if [ "$DEV_MODE" = true ]; then
-        echo -e "${cinza}[$(date '+%Y-%m-%d %H:%M:%S')] Running: $cmd${reset}"
+        echo -e "${cinza}$(date '+%Y-%m-%d %H:%M:%S') ${bege}[command]${cinza} > ${reset}$cmd"
     fi
     
     if eval "$cmd" > /dev/null 2>&1; then
@@ -137,7 +137,7 @@ fi
 DEV_MODE=false
 if [ "$1" == "--dev" ]; then
     DEV_MODE=true
-    echo -e "${cinza}[$(date '+%Y-%m-%d %H:%M:%S')] Modo desenvolvimento ativado${reset}"
+    echo -e "${cinza}$(date '+%Y-%m-%d %H:%M:%S') ${azul}[info]${cinza} > ${reset}Modo desenvolvimento ativado"
 fi
 
 # ============= INÍCIO DA INSTALAÇÃO =============
@@ -214,5 +214,5 @@ if [ "$DEV_MODE" = false ]; then
     sleep 2
     python3 setup.py
 else
-    echo -e "${cinza}[$(date '+%Y-%m-%d %H:%M:%S')] Bootstrap concluído${reset}"
+    echo -e "${cinza}$(date '+%Y-%m-%d %H:%M:%S') ${verde}[success]${cinza} > ${reset}Bootstrap concluído"
 fi

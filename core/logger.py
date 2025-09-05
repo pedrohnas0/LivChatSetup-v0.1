@@ -165,7 +165,7 @@ class Logger:
     def success(self, message: str):
         """Mensagem de sucesso"""
         if self.dev:
-            print(f"[{self._timestamp()}] Success: {message}")
+            print(f"{self.colors.CINZA}{self._timestamp()} {self.colors.VERDE}[success]{self.colors.CINZA} > {self.colors.RESET}{message}")
         else:
             if self.progress:
                 print(self.progress.step(message))
@@ -175,9 +175,9 @@ class Logger:
     def error(self, message: str, hint: str = None):
         """Mensagem de erro"""
         if self.dev:
-            print(f"[{self._timestamp()}] Error: {message}")
+            print(f"{self.colors.CINZA}{self._timestamp()} {self.colors.VERMELHO}[error]{self.colors.CINZA} > {self.colors.RESET}{message}")
             if hint:
-                print(f"[{self._timestamp()}] Hint: {hint}")
+                print(f"{self.colors.CINZA}{self._timestamp()} {self.colors.AMARELO}[hint]{self.colors.CINZA} > {self.colors.RESET}{hint}")
         else:
             if self.progress:
                 print(self.progress.error(message))
@@ -187,7 +187,7 @@ class Logger:
     def step(self, message: str):
         """Passo em progresso"""
         if self.dev:
-            print(f"[{self._timestamp()}] Step: {message}")
+            print(f"{self.colors.CINZA}{self._timestamp()} [step] > {self.colors.RESET}{message}")
         else:
             if self.progress:
                 print(self.progress.pending(message))
@@ -195,29 +195,40 @@ class Logger:
                 print(f"  {self.colors.CINZA}◌{self.colors.RESET} {message}")
     
     def info(self, message: str):
-        """Informação - só em dev"""
+        """Informação"""
         if self.dev:
-            print(f"[{self._timestamp()}] Info: {message}")
+            print(f"{self.colors.CINZA}{self._timestamp()} {self.colors.AZUL}[info]{self.colors.CINZA} > {self.colors.RESET}{message}")
+        else:
+            # Em produção, info aparece de forma sutil
+            print(f"  {self.colors.CINZA}ℹ{self.colors.RESET} {self.colors.CINZA}{message}{self.colors.RESET}")
+    
+    def warning(self, message: str):
+        """Aviso"""
+        if self.dev:
+            print(f"{self.colors.CINZA}{self._timestamp()} {self.colors.AMARELO}[warning]{self.colors.CINZA} > {self.colors.RESET}{message}")
+        else:
+            print(f"  {self.colors.AMARELO}⚠{self.colors.RESET} {self.colors.AMARELO}{message}{self.colors.RESET}")
     
     def command(self, cmd: str, output: str = None, code: int = None):
         """Log de comando - só em dev"""
         if self.dev:
-            print(f"[{self._timestamp()}] Running: {cmd}")
+            print(f"{self.colors.CINZA}{self._timestamp()} {self.colors.BEGE}[command]{self.colors.CINZA} > {self.colors.RESET}{cmd}")
             if output:
                 # Limita output para não poluir
                 lines = output.strip().split('\n')
                 for line in lines[:10]:
                     if line.strip():
-                        print(f"[{self._timestamp()}] Output: {line}")
+                        print(f"{self.colors.CINZA}{self._timestamp()} [output] > {self.colors.RESET}{line}")
                 if len(lines) > 10:
-                    print(f"[{self._timestamp()}] Output: ... ({len(lines)-10} linhas omitidas)")
+                    print(f"{self.colors.CINZA}{self._timestamp()} [output] > {self.colors.RESET}... ({len(lines)-10} linhas omitidas)")
             if code is not None:
-                print(f"[{self._timestamp()}] Return: {code}")
+                color = self.colors.VERDE if code == 0 else self.colors.VERMELHO
+                print(f"{self.colors.CINZA}{self._timestamp()} {color}[return]{self.colors.CINZA} > {self.colors.RESET}{code}")
     
     def debug(self, message: str):
         """Debug - só em dev"""
         if self.dev:
-            print(f"[{self._timestamp()}] Debug: {message}")
+            print(f"{self.colors.CINZA}{self._timestamp()} [debug] > {message}{self.colors.RESET}")
     
     def exception(self, e: Exception):
         """Log de exceção"""
